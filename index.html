@@ -61,8 +61,8 @@ body>*{position:relative;z-index:1}
 .rbtn{background:rgba(255,255,255,.06);border:1px solid var(--border2);color:var(--t2);padding:6px 14px;border-radius:var(--r);cursor:pointer;font-size:12px;font-family:'Sora',sans-serif;display:flex;align-items:center;gap:6px;transition:all .2s}
 .rbtn:hover{border-color:var(--violet);color:var(--violet)}
 .rbtn svg{width:13px;height:13px;stroke:currentColor;fill:none;stroke-width:2}
-.tabs-wrap{background:rgba(13,17,23,.96);border-bottom:1px solid var(--border);padding:4px 24px 0;display:flex;flex-wrap:wrap;gap:0;backdrop-filter:blur(16px)}
-.tab{padding:13px 18px;font-size:12px;font-weight:500;color:var(--t3);cursor:pointer;border-bottom:2px solid transparent;white-space:nowrap;transition:all .2s;display:flex;align-items:center;gap:8px}
+.tabs-wrap{background:rgba(13,17,23,.96);border-bottom:1px solid var(--border);padding:2px 16px 0;display:flex;flex-wrap:wrap;gap:0;backdrop-filter:blur(16px);max-height:88px;overflow:hidden}
+.tab{padding:9px 13px;font-size:11px;font-weight:500;color:var(--t3);cursor:pointer;border-bottom:2px solid transparent;white-space:nowrap;transition:all .2s;display:flex;align-items:center;gap:6px}
 .tab:hover{color:var(--t2)}
 .tab.active{color:var(--violet2);border-bottom-color:var(--violet)}
 .tab.special.active{color:var(--cyan2);border-bottom-color:var(--cyan)}
@@ -282,6 +282,13 @@ table.dt tr:hover td{background:rgba(139,92,246,.07);color:var(--t1)}
 .dp-empty-hint{font-size:12px;color:var(--t3);font-family:var(--font-mono)}
 
 .ts-time{color:var(--cyan2);font-family:var(--font-mono);font-size:10px;margin-left:4px}
+
+/* MONTH SELECTOR */
+.month-sel-wrap{position:relative}
+.month-sel{background:rgba(139,92,246,.12);border:1px solid rgba(139,92,246,.35);border-radius:8px;padding:6px 12px;color:var(--violet3);font-size:12px;font-family:'Sora',sans-serif;outline:none;cursor:pointer;transition:all .2s;min-width:150px;font-weight:500}
+.month-sel:hover,.month-sel:focus{border-color:rgba(139,92,246,.6);background:rgba(139,92,246,.2);box-shadow:0 0 12px rgba(139,92,246,.2)}
+.month-sel option{background:#0d1117;color:var(--t1)}
+
 </style>
 </head>
 <body>
@@ -303,6 +310,11 @@ table.dt tr:hover td{background:rgba(139,92,246,.07);color:var(--t1)}
   <div class="hdr-r">
     <span class="chip cv" id="sc">—</span>
     <span class="chip cc" id="tr">—</span>
+    <div class="month-sel-wrap" id="monthSelWrap">
+      <select class="month-sel" id="monthSel" onchange="setMonth(this.value)">
+        <option value="all">📆 All Months</option>
+      </select>
+    </div>
     <button class="rbtn" onclick="loadData()">
       <svg viewBox="0 0 24 24"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
       Refresh
@@ -316,7 +328,7 @@ table.dt tr:hover td{background:rgba(139,92,246,.07);color:var(--t1)}
 <script>
 const GAS='https://script.google.com/macros/s/AKfycbwTQhPXfe-eqVRS99ayr9BFvUKkWimvREiREMolZDRN9662UxeYOaAOxv56Vu3LFc0OZw/exec';
 const PS=50;
-let D={},activeTab='daily',S={},selDates=new Set();
+let D={},activeTab='daily',S={},selDates=new Set(),selMonth='all';
 
 function fetchViaScript(url){
   return new Promise((resolve,reject)=>{
@@ -396,13 +408,59 @@ function init(){
   document.getElementById('tr').textContent=total.toLocaleString()+' rows';
   const allDates=getAllDates();
   if(!selDates.size&&allDates.length){selDates.add(allDates[allDates.length-1]);}
-  buildTabs(sheets);renderActive();
+  buildTabs(sheets);
+  populateMonthDropdown();
+  renderActive();
+}
+
+function getMonthKey(dateStr){
+  const d=pDate(dateStr);
+  if(!d)return null;
+  const [y,m]=d.split('-');
+  return y+'-'+m;
+}
+
+function populateMonthDropdown(){
+  const sel=document.getElementById('monthSel');
+  if(!sel)return;
+  // Collect all months across all sheets
+  const months=new Set();
+  Object.values(D).forEach(rows=>{
+    (rows||[]).forEach(r=>{
+      const raw=r['Date']||r['Date ']||r['Timestamp']||'';
+      const mk=getMonthKey(String(raw));
+      if(mk)months.add(mk);
+    });
+  });
+  const sorted=[...months].sort().reverse();
+  const MONTHS=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  sel.innerHTML='<option value="all">📆 All Months</option>'
+    +sorted.map(mk=>{
+      const [y,m]=mk.split('-');
+      const label=MONTHS[parseInt(m)-1]+' '+y;
+      return`<option value="${mk}">${label}</option>`;
+    }).join('');
+  // Default to latest month
+  if(sorted.length&&selMonth==='all'){selMonth=sorted[0];sel.value=sorted[0];}
+  else sel.value=selMonth;
+}
+
+function setMonth(val){
+  selMonth=val;
+  // Reset date selection in daily report to only dates within this month
+  const allDates=getAllDates();
+  const filtered=selMonth==='all'?allDates:allDates.filter(d=>d.startsWith(selMonth));
+  selDates=new Set(filtered.length?[filtered[filtered.length-1]]:[]);
+  renderActive();
 }
 
 function getAllDates(){
   const keys=['Manpower','Production','Packing Ajay','Wastage','Blister'];
   const set=new Set();
-  keys.forEach(s=>(D[s]||[]).forEach(r=>{const d=pDate(r['Date']||r['Date ']);if(d)set.add(d);}));
+  keys.forEach(s=>(D[s]||[]).forEach(r=>{
+    const d=pDate(r['Date']||r['Date ']);
+    if(d&&(selMonth==='all'||d.startsWith(selMonth)))set.add(d);
+  }));
   return [...set].sort();
 }
 
@@ -440,6 +498,9 @@ function sw(name){
   activeTab=name;
   if(D[name]&&!S[name])S[name]={q:'',sc:null,sd:'asc',p:1,fc:'',fv:''};
   buildTabs(Object.keys(D));
+  // Sync month dropdown value
+  const sel=document.getElementById('monthSel');
+  if(sel)sel.value=selMonth;
   renderActive();
 }
 function renderActive(){activeTab==='daily'?renderDaily():renderSheet(activeTab);}
@@ -795,7 +856,13 @@ function sec(cls,title,color,thCls,count,body,meta){
 
 function renderSheet(name){
   if(!S[name])S[name]={q:'',sc:null,sd:'asc',p:1,fc:'',fv:''};
-  const rows=D[name]||[],st=S[name],el=document.getElementById('main');
+  const allRows=D[name]||[];
+  const rows=selMonth==='all'?allRows:allRows.filter(r=>{
+    const raw=r['Date']||r['Date ']||r['Timestamp']||'';
+    const mk=getMonthKey(String(raw));
+    return mk===selMonth;
+  });
+  const st=S[name],el=document.getElementById('main');
   if(!rows.length){el.innerHTML='<div class="lw"><div style="font-size:28px;opacity:.3">📭</div><div class="lt">No data.</div></div>';return;}
   const sm=sheetMeta(name);
   const hdrs=Object.keys(rows[0]),nums=nCols(rows,hdrs),dates=dCols(rows,hdrs);
@@ -817,23 +884,98 @@ function renderSheet(name){
 
 function cStats(rows,hdrs,nums){const o={};nums.forEach(col=>{const v=rows.map(r=>parseFloat(r[col])).filter(x=>!isNaN(x));if(!v.length)return;o[col]={sum:v.reduce((a,b)=>a+b,0),max:Math.max(...v),avg:v.reduce((a,b)=>a+b,0)/v.length};});return o;}
 function rStats(stats,rc,cc,sheetName,rows){
-  // Sheets that should show latest value instead of total
   const LATEST_SHEETS=['diesel','blister','boiler','depositor','tank','patta','electric','gas'];
-  const SUM_SHEETS=['production','packing','wastage','unloading','manpower','jelly'];
   const name=(sheetName||'').toLowerCase();
   const useLatest=LATEST_SHEETS.some(k=>name.includes(k));
-  const useSum=SUM_SHEETS.some(k=>name.includes(k));
 
-  // For latest: find last non-empty row per col
   function getLatest(col){
     const row=(rows||[]).slice().reverse().find(r=>r[col]!==''&&r[col]!=null&&!isNaN(parseFloat(r[col])));
-    return row?{val:parseFloat(row[col]),date:row['Date']||row['Date ']||row['Timestamp']||row['Blister Start Date Time']||null}:null;
+    return row?{val:parseFloat(row[col]),date:row['Date']||row['Date ']||row['Timestamp']||null}:null;
   }
 
-  const sc=Object.keys(stats).slice(0,4);
+  // ── PRODUCTION: product-wise Cartons, Sent, Stock ──
+  if(name.includes('production')&&!name.includes('packing')){
+    const prodData={};
+    (rows||[]).forEach(r=>{
+      const prod=r['Product']||'Unknown';
+      if(!prodData[prod])prodData[prod]={cartons:0,sent:0,stock:0};
+      prodData[prod].cartons+=num(r['Production Carton Qty']||0);
+      prodData[prod].sent+=num(r['Sent Carton Qty']||r['Dispatch Carton Qty']||0);
+      // Stock: keep latest value
+      const stk=r['Stock'];
+      if(stk!==''&&stk!=null&&!isNaN(parseFloat(stk)))prodData[prod].stock=parseFloat(stk);
+    });
+    const totalC=(rows||[]).reduce((a,r)=>a+num(r['Production Carton Qty']||0),0);
+    const totalS=(rows||[]).reduce((a,r)=>a+num(r['Sent Carton Qty']||r['Dispatch Carton Qty']||0),0);
+    const prodCards=Object.entries(prodData).map(([prod,d])=>{
+      const stkColor=d.stock<0?'rgba(244,63,94':'rgba(132,204,22';
+      return'<div class="stat-card" style="border:1px solid rgba(132,204,22,.25);background:rgba(132,204,22,.04);min-width:160px">'
+        +'<div class="slabel" style="color:rgba(132,204,22,.8);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+esc(prod)+'</div>'
+        +'<div style="display:flex;flex-direction:column;gap:4px;margin-top:4px">'
+        +'<div style="display:flex;justify-content:space-between;font-size:11px"><span style="color:var(--t3)">Prod</span><span style="font-family:var(--font-mono);color:var(--lime2)">'+fmt(d.cartons)+'</span></div>'
+        +'<div style="display:flex;justify-content:space-between;font-size:11px"><span style="color:var(--t3)">Sent</span><span style="font-family:var(--font-mono);color:var(--amber2)">'+fmt(d.sent)+'</span></div>'
+        +'<div style="display:flex;justify-content:space-between;font-size:11px"><span style="color:var(--t3)">Stock</span><span style="font-family:var(--font-mono);color:'+stkColor+',1)">'+fmt(d.stock)+'</span></div>'
+        +'</div></div>';
+    }).join('');
+    return'<div class="stats-row">'
+      +'<div class="stat-card"><div class="slabel">Total Cartons</div><div class="sval sv-l">'+fmt(totalC)+'</div></div>'
+      +'<div class="stat-card"><div class="slabel">Total Sent</div><div class="sval sv-a">'+fmt(totalS)+'</div></div>'
+      +prodCards
+      +'</div>';
+  }
+
+  // ── PACKING AJAY: product-wise qty + weight ──
+  if(name.includes('packing')){
+    const prodData={};
+    (rows||[]).forEach(r=>{
+      const prod=r['Product']||'Unknown';
+      if(!prodData[prod])prodData[prod]={qty:0,weight:0};
+      prodData[prod].qty+=num(r['Qty']||0);
+      const w=parseFloat(r['Weight']||0);
+      if(!isNaN(w)&&w>0)prodData[prod].weight+=w;
+    });
+    const prodCards=Object.entries(prodData).map(([prod,d])=>{
+      return'<div class="stat-card" style="border:1px solid rgba(167,139,250,.3);background:rgba(167,139,250,.05)">'
+        +'<div class="slabel" style="color:rgba(167,139,250,.8)">'+esc(prod)+'</div>'
+        +'<div class="sval" style="color:var(--violet2)">'+fmt(d.qty)+'</div>'
+        +'<div class="ssub" style="color:rgba(167,139,250,.5)">Cartons'+(d.weight>0?' · Wt: '+fmt(d.weight)+' g':'')+'</div>'
+        +'</div>';
+    }).join('');
+    return'<div class="stats-row">'
+      +'<div class="stat-card"><div class="slabel">Rows</div><div class="sval sv-v">'+rc.toLocaleString()+'</div></div>'
+      +'<div class="stat-card"><div class="slabel">Total Qty</div><div class="sval" style="color:var(--violet2)">'+fmt((rows||[]).reduce((a,r)=>a+num(r['Qty']||0),0))+'</div></div>'
+      +prodCards+'</div>';
+  }
+
+  // ── WASTAGE: product-wise PVC + Rejected ──
+  if(name.includes('wastage')){
+    const prodData={};
+    (rows||[]).forEach(r=>{
+      const prod=r['Product']||'Unknown';
+      if(!prodData[prod])prodData[prod]={pvc:0,rej:0,rm:0};
+      prodData[prod].pvc+=parseFloat(String(r['🧴 PVC Wastage (kg)']||'').replace(/[^\d.]/g,''))||0;
+      prodData[prod].rej+=num(r['❌ Rejected Products (pcs)']||0);
+      prodData[prod].rm+=parseFloat(r['🧪 Raw Material Wastage (kg)']||0)||0;
+    });
+    const totalPVC=(rows||[]).reduce((a,r)=>a+(parseFloat(String(r['🧴 PVC Wastage (kg)']||'').replace(/[^\d.]/g,''))||0),0);
+    const prodCards=Object.entries(prodData).map(([prod,d])=>{
+      return'<div class="stat-card" style="border:1px solid rgba(244,63,94,.25);background:rgba(244,63,94,.04);min-width:150px">'
+        +'<div class="slabel" style="color:rgba(244,63,94,.8);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+esc(prod)+'</div>'
+        +'<div style="display:flex;flex-direction:column;gap:4px;margin-top:4px">'
+        +'<div style="display:flex;justify-content:space-between;font-size:11px"><span style="color:var(--t3)">PVC</span><span style="font-family:var(--font-mono);color:var(--rose2)">'+d.pvc.toFixed(1)+' kg</span></div>'
+        +(d.rej?'<div style="display:flex;justify-content:space-between;font-size:11px"><span style="color:var(--t3)">Rejected</span><span style="font-family:var(--font-mono);color:var(--amber2)">'+fmt(d.rej)+' pcs</span></div>':'')
+        +(d.rm?'<div style="display:flex;justify-content:space-between;font-size:11px"><span style="color:var(--t3)">RM</span><span style="font-family:var(--font-mono);color:var(--rose2)">'+d.rm.toFixed(1)+' kg</span></div>':'')
+        +'</div></div>';
+    }).join('');
+    return'<div class="stats-row">'
+      +'<div class="stat-card" style="border:1px solid rgba(244,63,94,.25);background:rgba(244,63,94,.05)"><div class="slabel" style="color:rgba(244,63,94,.7)">Total PVC</div><div class="sval" style="color:var(--rose2)">'+totalPVC.toFixed(1)+' kg</div></div>'
+      +prodCards+'</div>';
+  }
+
+  // ── LATEST SHEETS ──
+  const sc=Object.keys(stats).filter(col=>col!=='Stock'&&col!=='stock').slice(0,4);
   const statCards=sc.map(col=>{
     const s=stats[col];
-
     if(useLatest){
       const lt=getLatest(col);
       const accentCol=name.includes('diesel')?'rgba(245,158,11':name.includes('blister')?'rgba(6,182,212':name.includes('boiler')?'rgba(239,68,68':name.includes('gas')||name.includes('electric')?'rgba(163,230,53':'rgba(139,92,246';
@@ -843,23 +985,18 @@ function rStats(stats,rc,cc,sheetName,rows){
         +'<div class="ssub" style="color:'+accentCol+',.5)">Latest'+(lt&&lt.date?' · '+fmtDate(lt.date):'')+'</div>'
         +'</div>';
     }
-
-    if(useSum){
-      return'<div class="stat-card"><div class="slabel">'+esc(col)+'</div><div class="sval sv-l">'+fmt(s.sum)+'</div><div class="ssub">avg '+fmt(s.avg)+' · max '+fmt(s.max)+'</div></div>';
-    }
-
-    // Default: show avg + max only (no misleading totals)
+    const isSumSheet=['manpower','unloading','jelly'].some(k=>name.includes(k));
+    if(isSumSheet) return'<div class="stat-card"><div class="slabel">'+esc(col)+'</div><div class="sval sv-l">'+fmt(s.sum)+'</div><div class="ssub">avg '+fmt(s.avg)+' · max '+fmt(s.max)+'</div></div>';
     return'<div class="stat-card"><div class="slabel">'+esc(col)+'</div><div class="sval sv-a">'+fmt(s.avg)+'</div><div class="ssub">avg · max '+fmt(s.max)+'</div></div>';
   }).join('');
 
   return'<div class="stats-row">'
     +'<div class="stat-card"><div class="slabel">Rows</div><div class="sval sv-v">'+rc.toLocaleString()+'</div></div>'
     +'<div class="stat-card"><div class="slabel">Columns</div><div class="sval sv-c">'+cc+'</div></div>'
-    +statCards
-    +'</div>';
+    +statCards+'</div>';
 }
 
-function rTbar(name,hdrs,st,filt,total){const hasF=st.q||st.fv;return`<div class="toolbar"><div class="sw"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg><input class="sinp" type="text" placeholder="Search…" value="${esc(st.q)}" oninput="uq('${esc(name)}',this.value)" id="sb"></div><select class="fsel" onchange="ufc('${esc(name)}',this.value)"><option value="">All columns</option>${hdrs.map(h=>`<option value="${esc(h)}" ${st.fc===h?'selected':''}>${esc(h)}</option>`).join('')}</select>${st.fc?`<input class="finp" type="text" placeholder="Filter value…" value="${esc(st.fv)}" oninput="ufv('${esc(name)}',this.value)">`:``}${hasF?`<button class="tbtn" onclick="cf('${esc(name)}')"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>Clear</button>`:''}<span class="ri">${filt!==total?filt.toLocaleString()+' of '+total.toLocaleString():filt.toLocaleString()+' rows'}</span><button class="tbtn" onclick="xCSV('${esc(name)}')"><svg viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>CSV</button></div>`;}
+function rTbar(name,hdrs,st,filt,total){const hasF=st.q||st.fv;return`<div class="toolbar"><div class="sw"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg><input class="sinp" type="text" placeholder="Search…" value="${esc(st.q)}" oninput="uq('${esc(name)}',this.value)" id="sb"></div><select class="fsel" onchange="ufc('${esc(name)}',this.value)"><option value="">All columns</option>${hdrs.map(h=>`<option value="${esc(h)}" ${st.fc===h?'selected':''}>${esc(h)}</option>`).join('')}</select>${st.fc?`<input class="finp" type="text" placeholder="Filter value…" value="${esc(st.fv)}" oninput="ufv('${esc(name)}',this.value)">`:``}${hasF?`<button class="tbtn" onclick="cf('${esc(name)}')"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>Clear</button>`:''}<span class="ri" id="ri-${esc(name)}">${filt!==total?filt.toLocaleString()+' of '+total.toLocaleString():filt.toLocaleString()+' rows'}</span><button class="tbtn" onclick="xCSV('${esc(name)}')"><svg viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>CSV</button></div>`;}
 function driveUrl(s){
   // Convert open?id= to /file/d/ID/view for direct open
   const m=s.match(/[?&]id=([a-zA-Z0-9_-]+)/);
@@ -889,12 +1026,42 @@ function cell(val,col,nums,dates){
   return`<td class="n-t2">${esc(s)}</td>`;
 }
 function pag(name,p,tp,tot){if(tp<=1)return'';const pages=[];for(let i=1;i<=tp;i++){if(i===1||i===tp||(i>=p-2&&i<=p+2))pages.push(i);else if(pages[pages.length-1]!=='…')pages.push('…');}return`<div class="pg"><span class="pi">Page ${p} of ${tp}</span><button class="pb" onclick="gp('${esc(name)}',${p-1})" ${p<=1?'disabled':''}>‹</button>${pages.map(x=>x==='…'?`<span class="pe">…</span>`:`<button class="pb ${x===p?'active':''}" onclick="gp('${esc(name)}',${x})">${x}</button>`).join('')}<button class="pb" onclick="gp('${esc(name)}',${p+1})" ${p>=tp?'disabled':''}>›</button></div>`;}
-function uq(n,v){S[n].q=v;S[n].p=1;renderSheet(n);}
+function getSheetRows(n){
+  const allRows=D[n]||[];
+  return selMonth==='all'?allRows:allRows.filter(r=>{
+    const raw=r['Date']||r['Date ']||r['Timestamp']||'';
+    return getMonthKey(String(raw))===selMonth;
+  });
+}
+function uq(n,v){
+  S[n].q=v;S[n].p=1;
+  const rows=getSheetRows(n);
+  if(!rows.length)return;
+  const hdrs=Object.keys(rows[0]);
+  renderSheetTable(n,rows,hdrs,nCols(rows,hdrs),dCols(rows,hdrs),S[n]);
+}
 function ufc(n,v){S[n].fc=v;S[n].fv='';S[n].p=1;renderSheet(n);}
-function ufv(n,v){S[n].fv=v;S[n].p=1;renderSheet(n);}
+function ufv(n,v){
+  S[n].fv=v;S[n].p=1;
+  const rows=getSheetRows(n);
+  if(!rows.length)return;
+  const hdrs=Object.keys(rows[0]);
+  renderSheetTable(n,rows,hdrs,nCols(rows,hdrs),dCols(rows,hdrs),S[n]);
+}
 function cf(n){S[n].q='';S[n].fc='';S[n].fv='';S[n].p=1;renderSheet(n);}
-function sBy(n,i){const st=S[n];st.sc===i?st.sd=st.sd==='asc'?'desc':'asc':(st.sc=i,st.sd='asc');st.p=1;renderSheet(n);}
-function gp(n,p){S[n].p=p;renderSheet(n);window.scrollTo(0,0);}
+function sBy(n,i){const st=S[n];st.sc===i?st.sd=st.sd==='asc'?'desc':'asc':(st.sc=i,st.sd='asc');st.p=1;
+  const rows=getSheetRows(n);
+  if(!rows.length)return;
+  const hdrs=Object.keys(rows[0]);
+  renderSheetTable(n,rows,hdrs,nCols(rows,hdrs),dCols(rows,hdrs),S[n]);
+}
+function gp(n,p){S[n].p=p;
+  const rows=getSheetRows(n);
+  if(!rows.length)return;
+  const hdrs=Object.keys(rows[0]);
+  renderSheetTable(n,rows,hdrs,nCols(rows,hdrs),dCols(rows,hdrs),S[n]);
+  window.scrollTo(0,0);
+}
 function fRows(rows,st,hdrs){let o=rows;if(st.q){const q=st.q.toLowerCase();o=o.filter(r=>hdrs.some(h=>String(r[h]||'').toLowerCase().includes(q)));}if(st.fc&&st.fv){const q=st.fv.toLowerCase();o=o.filter(r=>String(r[st.fc]||'').toLowerCase().includes(q));}return o;}
 function nCols(rows,hdrs){return hdrs.filter(h=>{const s=rows.slice(0,20).map(r=>r[h]).filter(v=>v!==''&&v!=null);return s.length&&s.filter(v=>!isNaN(parseFloat(v))&&isFinite(v)).length/s.length>.7;});}
 function dCols(rows,hdrs){return hdrs.filter(h=>{
