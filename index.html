@@ -311,7 +311,7 @@ table.dt tr:hover td{background:rgba(139,92,246,.07);color:var(--t1)}
 <div class="layout">
   <div class="sidebar" id="sidebar">
     <div class="sidebar-header">
-      <div class="sidebar-brand">Saraswati Operations</div>
+      <div class="sidebar-brand">MDF Operations</div>
       <div class="sidebar-title">Factory Dashboard</div>
       <div class="sidebar-sub" id="sidebar-sub">Loading…</div>
     </div>
@@ -526,9 +526,9 @@ function renderDaily(){
       <div class="dp-sel-chips">${selArr.map(d=>`<span class="dp-sel-chip">${fmtDisp(d)}<button class="dp-sel-remove" onclick="toggleDate('${d}')">×</button></span>`).join('')}</div>
       <span class="dp-sel-count">${selArr.length} date${selArr.length!==1?'s':''}</span>
     </div>`:''}</div>
-    <div id="dp-kpi-zone">${selDates.size?`<div class="dp-kpi-row">${buildKpiRow()}</div>`:''}
+    <div id="dp-kpi-zone">${selDates.size?`<div class="dp-kpi-row">${buildKpiRow()}</div>`:''}</div>
   </div>
-  ${selDates.size?renderSections():`<div class="dp-empty"><div class="dp-empty-icon">📅</div><div class="dp-empty-text">Select dates from the dropdown above</div><div class="dp-empty-hint">Use quick buttons or search by date</div></div>`}</div>`;
+  <div id="dp-sec-zone">${selDates.size?renderSections():`<div class="dp-empty"><div class="dp-empty-icon">📅</div><div class="dp-empty-text">Select dates from the dropdown above</div><div class="dp-empty-hint">Use quick buttons or search by date</div></div>`}</div>`;
   setTimeout(()=>{
     document.addEventListener('click',function oc(e){
       const wrap=document.getElementById('dpDropWrap');
@@ -954,7 +954,15 @@ function lDate(s){return s&&s.length>5&&(/\d{4}-\d{2}-\d{2}/.test(s)||/\d{1,2}\/
 function fmtDate(v){
   try{
     const s=String(v).trim();if(!s||s==='—')return'—';
-    function fmt2(d,hasT){if(isNaN(d.getTime()))return esc(s);const dt=d.toLocaleDateString('en-IN',{day:'2-digit',month:'short',year:'numeric'});if(!hasT)return dt;const tm=d.toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit',hour12:true});return dt+' <span class="ts-time">'+tm+'</span>';}
+    function fmt2(d,hasT){
+      if(isNaN(d.getTime()))return esc(s);
+      const tm=d.toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit',hour12:true});
+      // Excel/Sheets time-only value (no real date) → show only time
+      if(d.getFullYear()<=1900)return '<span class="ts-time">'+tm+'</span>';
+      const dt=d.toLocaleDateString('en-IN',{day:'2-digit',month:'short',year:'numeric'});
+      if(!hasT)return dt;
+      return dt+' <span class="ts-time">'+tm+'</span>';
+    }
     let m=s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})\s+(\d{1,2}):(\d{2})(?::(\d{2}))?/);if(m)return fmt2(new Date(+m[3],+m[2]-1,+m[1],+m[4],+m[5],+(m[6]||0)),true);
     m=s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);if(m)return fmt2(new Date(+m[3],+m[2]-1,+m[1]),false);
     m=s.match(/^(\d{4})-(\d{2})-(\d{2})[T ](\d{2}):(\d{2})/);if(m)return fmt2(new Date(+m[1],+m[2]-1,+m[3],+m[4],+m[5]),true);
