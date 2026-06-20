@@ -65,7 +65,7 @@ body>*{position:relative;z-index:1}
 .ham-btn svg{width:20px;height:20px;stroke:currentColor;fill:none;stroke-width:2}
 /* Overlay */
 .sidebar-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:49;backdrop-filter:blur(2px)}
-/*.sidebar-overlay.show{display:block} */
+.sidebar-overlay.show{display:block}
 .main{padding:16px 20px;max-width:1400px}
 .sections{display:flex;flex-direction:column;gap:20px}
 .section{border-radius:var(--rl);overflow:hidden;border:1px solid var(--border)}
@@ -913,15 +913,29 @@ function rTbar(name,hdrs,st,filt,total){const hasF=st.q||st.fv;return`<div class
 
 function driveUrl(s){const m=s.match(/[?&]id=([a-zA-Z0-9_-]+)/);if(m)return`https://drive.google.com/file/d/${m[1]}/view`;return s;}
 
+function driveThumb(s){
+  const m=s.match(/[?&]id=([a-zA-Z0-9_-]+)/)||s.match(/\/d\/([a-zA-Z0-9_-]+)/);
+  if(m)return`https://drive.google.com/thumbnail?id=${m[1]}&sz=w200`;
+  return null;
+}
 function cell(val,col,nums,dates){
   if(val===null||val===undefined||val==='')return`<td class="n-em">—</td>`;
   const s=String(val);
+  // Check image/photo URL FIRST (before date check) — column names like
+  // "Image Upload with TimeStamp" would otherwise match the date regex
+  if(s.startsWith('http')&&/image|photo|picture|pic\b/i.test(col)&&s.includes('drive.google.com')){
+    const thumb=driveThumb(s);const href=driveUrl(s);
+    if(thumb)return`<td><a href="${esc(href)}" target="_blank" rel="noopener" style="display:inline-block"><img src="${esc(thumb)}" alt="photo" loading="lazy" style="width:48px;height:48px;object-fit:cover;border-radius:6px;border:1px solid rgba(34,211,238,.3);vertical-align:middle;cursor:pointer;transition:transform .15s" onmouseover="this.style.transform='scale(1.8)';this.style.zIndex=10;this.style.position='relative'" onmouseout="this.style.transform='scale(1)'" onerror="this.parentElement.outerHTML='<a href=\'${esc(href)}\' target=\'_blank\' style=\'color:var(--cyan);font-size:11px\'>📷 View Photo</a>'"></a></td>`;
+  }
   const isDateCol=/timestamp|date|time|start|end/i.test(col);
   if(dates.includes(col)||isDateCol||lDate(s)){if(!s||s==='—')return`<td class="n-em">—</td>`;return`<td class="tdt" style="white-space:nowrap">${fmtDate(val)}</td>`;}
   if(s.toLowerCase()==='true'||s.toLowerCase()==='yes')return`<td style="color:var(--lime)">✓</td>`;
   if(s.toLowerCase()==='false'||s.toLowerCase()==='no')return`<td style="color:var(--rose)">✗</td>`;
   if(nums.includes(col)&&!isNaN(parseFloat(s)))return`<td class="tnm">${fmt(parseFloat(s))}</td>`;
-  if(s.startsWith('http')){const href=s.includes('drive.google.com')?driveUrl(s):s;const label=s.includes('drive.google.com')?'📷 View Photo':'🔗 Open';return`<td><a href="${esc(href)}" target="_blank" rel="noopener" style="display:inline-flex;align-items:center;gap:5px;font-size:11px;padding:3px 9px;border-radius:5px;background:rgba(34,211,238,.1);color:var(--cyan);border:1px solid rgba(34,211,238,.25);text-decoration:none;font-family:var(--font-mono);white-space:nowrap" onmouseover="this.style.background='rgba(34,211,238,.2)'" onmouseout="this.style.background='rgba(34,211,238,.1)'">${label}</a></td>`;}
+  if(s.startsWith('http')){
+    const href=s.includes('drive.google.com')?driveUrl(s):s;const label=s.includes('drive.google.com')?'📷 View Photo':'🔗 Open';
+    return`<td><a href="${esc(href)}" target="_blank" rel="noopener" style="display:inline-flex;align-items:center;gap:5px;font-size:11px;padding:3px 9px;border-radius:5px;background:rgba(34,211,238,.1);color:var(--cyan);border:1px solid rgba(34,211,238,.25);text-decoration:none;font-family:var(--font-mono);white-space:nowrap" onmouseover="this.style.background='rgba(34,211,238,.2)'" onmouseout="this.style.background='rgba(34,211,238,.1)'">${label}</a></td>`;
+  }
   if(s.length>80)return`<td title="${esc(s)}">${esc(s.slice(0,78))}…</td>`;
   return`<td class="n-t2">${esc(s)}</td>`;
 }
