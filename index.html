@@ -65,7 +65,7 @@ body>*{position:relative;z-index:1}
 .ham-btn svg{width:20px;height:20px;stroke:currentColor;fill:none;stroke-width:2}
 /* Overlay */
 .sidebar-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:49;backdrop-filter:blur(2px)}
-/*.sidebar-overlay.show{display:block}*/
+.sidebar-overlay.show{display:block}
 .main{padding:16px 20px;max-width:1400px}
 .sections{display:flex;flex-direction:column;gap:20px}
 .section{border-radius:var(--rl);overflow:hidden;border:1px solid var(--border)}
@@ -333,7 +333,7 @@ let D={},activeTab='daily',S={},selDates=new Set(),selMonth='all';
 function fetchViaScript(url){
   return new Promise((resolve,reject)=>{
     const cbName='_gasCallback_'+Date.now();
-    const timeout=setTimeout(()=>{delete window[cbName];try{document.head.removeChild(script);}catch(e){}reject(new Error('JSONP timeout'));},15000);
+    const timeout=setTimeout(()=>{delete window[cbName];try{document.head.removeChild(script);}catch(e){}reject(new Error('JSONP timeout'));},45000);
     window[cbName]=function(data){clearTimeout(timeout);delete window[cbName];try{document.head.removeChild(script);}catch(e){}resolve(data);};
     const script=document.createElement('script');
     script.src=url+(url.includes('?')?'&':'?')+'callback='+cbName;
@@ -343,11 +343,15 @@ function fetchViaScript(url){
 }
 
 async function loadData(){
-  document.getElementById('main').innerHTML='<div class="lw"><div class="sp"></div><div class="lt">Fetching sheets data…</div><div style="font-size:11px;color:var(--t3);font-family:var(--font-mono);margin-top:4px" id="fetch-status">Connecting…</div></div>';
+  document.getElementById('main').innerHTML='<div class="lw"><div class="sp"></div><div class="lt">Fetching sheets data…</div><div style="font-size:11px;color:var(--t3);font-family:var(--font-mono);margin-top:4px" id="fetch-status">Connecting…</div><div style="font-size:10px;color:var(--t3);font-family:var(--font-mono);margin-top:2px" id="fetch-timer">0s</div></div>';
   document.getElementById('tabs').innerHTML='';
   const setStatus=msg=>{const el=document.getElementById('fetch-status');if(el)el.textContent=msg;};
+  // Elapsed timer
+  const t0=Date.now();
+  const timerEl=()=>document.getElementById('fetch-timer');
+  const elapsedInt=setInterval(()=>{const el=timerEl();if(el)el.textContent=((Date.now()-t0)/1000).toFixed(0)+'s elapsed';},1000);
   const ctrl=new AbortController();
-  const timer=setTimeout(()=>ctrl.abort(),15000);
+  const timer=setTimeout(()=>ctrl.abort(),30000);
   try{
     setStatus('Sending request…');
     const r=await fetch(GAS,{method:'GET',credentials:'omit',mode:'cors',redirect:'follow',headers:{'Accept':'application/json'},signal:ctrl.signal});
@@ -357,13 +361,27 @@ async function loadData(){
     const text=await r.text();
     const clean=text.trim().replace(/^\uFEFF/,'');
     if(!clean.startsWith('{'))throw new Error('Bad response: '+clean.slice(0,60));
-    D=JSON.parse(clean);init();
+    D=JSON.parse(clean);clearInterval(elapsedInt);init();
   }catch(e){
-    clearTimeout(timer);
-    setStatus('Trying fallback…');
-    try{D=await fetchViaScript(GAS);init();}
+    clearTimeout(timer);clearInterval(elapsedInt);
+    setStatus('Trying fallback (JSONP)… may take up to 45s');
+    try{D=await fetchViaScript(GAS);clearInterval(elapsedInt);init();}
     catch(e2){
-      document.getElementById('main').innerHTML=`<div class="lw"><div style="font-size:36px">⚠️</div><div style="font-size:15px;font-weight:600;color:var(--rose2);margin-bottom:6px">Failed to load</div><div style="font-size:12px;color:var(--t2);text-align:center;max-width:400px;line-height:1.8;background:rgba(244,63,94,.06);border:1px solid rgba(244,63,94,.2);border-radius:12px;padding:16px 20px">Deploy → Manage deployments → <b style="color:var(--lime)">New version</b><br>Execute as: <b style="color:var(--lime)">Me</b> &nbsp;·&nbsp; Access: <b style="color:var(--lime)">Anyone</b><br><span style="font-size:10px;color:var(--t3)">${e.message} / ${e2.message}</span></div><button onclick="loadData()" style="margin-top:16px;background:rgba(139,92,246,.2);border:1px solid rgba(139,92,246,.4);color:var(--violet3);padding:10px 24px;border-radius:10px;font-size:13px;font-family:'Sora',sans-serif;cursor:pointer;font-weight:600">↻ Retry</button></div>`;
+      clearInterval(elapsedInt);
+      document.getElementById('main').innerHTML=`<div class="lw"><div style="font-size:36px">⚠️</div><div style="font-size:15px;font-weight:600;color:var(--rose2);margin-bottom:6px">Failed to load data</div><div style="font-size:12px;color:var(--t2);text-align:center;max-width:420px;line-height:1.9;background:rgba(244,63,94,.06);border:1px solid rgba(244,63,94,.2);border-radius:12px;padding:16px 20px">
+        <b style="color:var(--amber)">Most likely causes:</b><br>
+        1. GAS script timed out (too many rows)<br>
+        2. Not redeployed after code change<br><br>
+        <b>Check in Apps Script:</b><br>
+        Deploy → Manage → <b style="color:var(--lime)">New version</b><br>
+        Execute as: <b style="color:var(--lime)">Me</b> · Access: <b style="color:var(--lime)">Anyone</b><br>
+        Then check <b style="color:var(--lime)">Executions</b> tab for errors<br>
+        <span style="font-size:10px;color:var(--t3);margin-top:6px;display:block">${e.message} / ${e2.message}</span>
+      </div>
+      <div style="display:flex;gap:10px;margin-top:16px">
+        <button onclick="loadData()" style="background:rgba(139,92,246,.2);border:1px solid rgba(139,92,246,.4);color:var(--violet3);padding:10px 24px;border-radius:10px;font-size:13px;font-family:'Sora',sans-serif;cursor:pointer;font-weight:600">↻ Retry</button>
+        <button onclick="loadData()" style="background:rgba(6,182,212,.1);border:1px solid rgba(6,182,212,.3);color:var(--cyan3);padding:10px 24px;border-radius:10px;font-size:13px;font-family:'Sora',sans-serif;cursor:pointer;font-weight:600">↻ Retry with JSONP</button>
+      </div></div>`;
     }
   }
 }
