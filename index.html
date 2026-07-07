@@ -292,7 +292,7 @@ table.dt tr:hover td{background:rgba(139,92,246,.07);color:var(--t1)}
   <button class="ham-btn" id="hamBtn" onclick="toggleSidebar()">
     <svg viewBox="0 0 24 24"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
   </button>
-  <span class="hdr-brand">DASHBOARD</span>
+  <span class="hdr-brand">MDF</span>
   <span class="hdr-name">Saraswati Tasks</span>
   <div class="hdr-r">
     <span class="chip cv" id="sc">—</span>
@@ -311,7 +311,7 @@ table.dt tr:hover td{background:rgba(139,92,246,.07);color:var(--t1)}
 <div class="layout">
   <div class="sidebar" id="sidebar">
     <div class="sidebar-header">
-      <div class="sidebar-brand">SARASWATI Operations</div>
+      <div class="sidebar-brand">MDF Operations</div>
       <div class="sidebar-title">Factory Dashboard</div>
       <div class="sidebar-sub" id="sidebar-sub">Loading…</div>
     </div>
@@ -865,13 +865,22 @@ function renderSheet(name){
   el.innerHTML=sheetHeader+rStats(stats,filt.length,hdrs.length,name,filt)+rTbar(name,hdrs,st,tot,rows.length)+`<div class="tbl-wrap2"><div style="overflow-x:auto"><table class="dt"><thead><tr><th class="tix">#</th>${hdrs.map((h,i)=>`<th onclick="sBy('${esc(name)}',${i})" class="${st.sc===i?'s'+st.sd:''}">${esc(h)}<span class="si"></span></th>`).join('')}</tr></thead><tbody>${pr.map((row,ri)=>`<tr><td class="tix">${(st.p-1)*PS+ri+1}</td>${hdrs.map(h=>cell(row[h],h,nums,dates)).join('')}</tr>`).join('')}</tbody></table></div>${pag(name,st.p,tp,tot)}</div>`;
 }
 
-function cStats(rows,hdrs,nums){const o={};nums.forEach(col=>{const v=rows.map(r=>parseFloat(r[col])).filter(x=>!isNaN(x));if(!v.length)return;o[col]={sum:v.reduce((a,b)=>a+b,0),max:Math.max(...v),avg:v.reduce((a,b)=>a+b,0)/v.length};});return o;}
+function cStats(rows,hdrs,nums){const o={};nums.forEach(col=>{const v=rows.map(r=>parseFloat(r[col])).filter(x=>!isNaN(x));if(!v.length)return;o[col]={sum:v.reduce((a,b)=>a+b,0),max:Math.max(...v),min:Math.min(...v),avg:v.reduce((a,b)=>a+b,0)/v.length};});return o;}
 
 function rStats(stats,rc,cc,sheetName,rows){
-  const LATEST=['diesel','blister','boiler','depositor','tank','patta','electric','gas'];
+  const LATEST=['diesel','blister','boiler','depositor','tank','patta','electric','gas','meter','paraffin'];
   const name=(sheetName||'').toLowerCase();
   const useLatest=LATEST.some(k=>name.includes(k));
-  function getLatest(col){const row=(rows||[]).slice().reverse().find(r=>r[col]!==''&&r[col]!=null&&!isNaN(parseFloat(r[col])));return row?{val:parseFloat(row[col]),date:row['Date']||row['Date ']||row['Timestamp']||null}:null;}
+  function getLatest(col){
+    // rows are already sorted desc (latest first) — just find first non-null
+    const row=(rows||[]).find(r=>r[col]!==''&&r[col]!=null&&!isNaN(parseFloat(r[col])));
+    if(row)return{val:parseFloat(row[col]),date:row['Date']||row['Date ']||row['Timestamp']||null};
+    // fallback: scan all rows, pick row with max date
+    const all=(rows||[]).filter(r=>r[col]!==''&&r[col]!=null&&!isNaN(parseFloat(r[col])));
+    if(!all.length)return null;
+    all.sort((a,b)=>{const da=pDate(a['Date']||a['Date ']||a['Timestamp']||'');const db=pDate(b['Date']||b['Date ']||b['Timestamp']||'');return(db||'').localeCompare(da||'');});
+    return{val:parseFloat(all[0][col]),date:all[0]['Date']||all[0]['Date ']||all[0]['Timestamp']||null};
+  }
 
   if(name.includes('production')&&!name.includes('packing')){
     const prodData={};
@@ -919,12 +928,90 @@ function rStats(stats,rc,cc,sheetName,rows){
   const sc=Object.keys(stats).filter(col=>col!=='Stock'&&col!=='stock').slice(0,4);
   const statCards=sc.map(col=>{
     const s=stats[col];
+    // ── METER READING: KWH, KVAH, MD, PF with latest + max ──
+    if(useLatest&&name.includes('meter')){
+      const lt=getLatest(col);
+      const maxVal=s.max;
+      const isTarget=/kwh|kvah|md|pf/i.test(col);
+      if(!isTarget)return''; // skip non-target columns
+      const ac='rgba(129,140,248';
+      return'<div class="stat-card" style="border:1px solid '+ac+',.3);background:'+ac+',.05)">'
+        +'<div class="slabel" style="color:'+ac+',.8)">'+esc(col)+'</div>'
+        +'<div class="sval" style="color:'+ac+',1)">'+(lt?fmt(lt.val):'—')+'</div>'
+        +'<div class="ssub" style="color:'+ac+',.5)">Latest'+(lt&&lt.date?' · '+fmtDate(lt.date):'')+'</div>'
+        +'<div class="ssub" style="color:'+ac+',.4);margin-top:2px">Min: '+fmt(s.min===undefined?Math.min(...(rows||[]).map(r=>parseFloat(r[col])).filter(x=>!isNaN(x))):s.min)+'</div>'
+        +'</div>';
+    }
     if(useLatest){const lt=getLatest(col);const ac=name.includes('diesel')?'rgba(245,158,11':name.includes('blister')?'rgba(6,182,212':name.includes('boiler')?'rgba(239,68,68':name.includes('gas')||name.includes('electric')?'rgba(163,230,53':'rgba(139,92,246';return'<div class="stat-card" style="border:1px solid '+ac+',.3);background:'+ac+',.05)"><div class="slabel" style="color:'+ac+',.7)">'+esc(col)+'</div><div class="sval" style="color:'+ac+',1)">'+(lt?fmt(lt.val):'—')+'</div><div class="ssub" style="color:'+ac+',.5)">Latest'+(lt&&lt.date?' · '+fmtDate(lt.date):'')+'</div></div>';}
-    const isSumSheet=['manpower','unloading'].some(k=>name.includes(k));
-    if(isSumSheet)return'<div class="stat-card"><div class="slabel">'+esc(col)+'</div><div class="sval sv-l">'+fmt(s.sum)+'</div><div class="ssub">avg '+fmt(s.avg)+' · max '+fmt(s.max)+'</div></div>';
+    const isSumSheet=['unloading','loading','wafer','depositor','stick'].some(k=>name.includes(k));
+    if(isSumSheet)return'<div class="stat-card"><div class="slabel">'+esc(col)+'</div><div class="sval sv-l">'+fmt(s.sum)+'</div></div>';
     return'<div class="stat-card"><div class="slabel">'+esc(col)+'</div><div class="sval sv-a">'+fmt(s.avg)+'</div><div class="ssub">avg · max '+fmt(s.max)+'</div></div>';
   }).join('');
-  return'<div class="stats-row"><div class="stat-card"><div class="slabel">Rows</div><div class="sval sv-v">'+rc.toLocaleString()+'</div></div><div class="stat-card"><div class="slabel">Columns</div><div class="sval sv-c">'+cc+'</div></div>'+statCards+'</div>';
+
+  // ── MANPOWER dedicated stats ──
+  // ── GUARD / GATE ENTRY ──
+  if(name.includes('guard')||name.includes('gate')||name.includes('entry')||name.includes('inhouse')||name.includes('visitor')){
+    // Find the column that holds Visitor/Material type
+    const hdrs2=rows.length?Object.keys(rows[0]):[];
+    // Try "Type","Category","Entry Type","Reason" — pick first col with visitor/material values
+    const typeCol=hdrs2.find(h=>(rows||[]).slice(0,20).some(r=>/visitor|material/i.test(String(r[h]||''))));
+    const visitorCount=typeCol?(rows||[]).filter(r=>/visitor/i.test(String(r[typeCol]||''))).length:0;
+    const materialCount=typeCol?(rows||[]).filter(r=>/material/i.test(String(r[typeCol]||''))).length:0;
+    const otherCount=(rows||[]).length-visitorCount-materialCount;
+
+    function geCard(label,val,color){
+      return'<div class="stat-card" style="border-color:'+color+'40;background:'+color+'08">'
+        +'<div class="slabel" style="color:'+color+'99">'+label+'</div>'
+        +'<div class="sval" style="color:'+color+'">'+val+'</div>'
+        +'</div>';
+    }
+    return'<div class="stats-row">'
+      +geCard('Total Entries',rc,'var(--violet2)')
+      +geCard('Visitor',visitorCount,'var(--cyan2)')
+      +geCard('Material',materialCount,'var(--amber2)')
+      +(otherCount>0?geCard('Other',otherCount,'var(--t2)'):'')
+      +'</div>';
+  }
+
+  if(name.includes('manpower')){
+    const mp_cols={
+      'Mistri':          {label:'Mistri',       color:'var(--amber2)'},
+      'Operator (MALE)': {label:'Op. Male',      color:'var(--cyan2)'},
+      'Worker (MALE)':   {label:'Wkr. Male',     color:'var(--cyan)'},
+      'Worker (FEMALE)': {label:'Wkr. Female',   color:'var(--violet2)'},
+      'EXTRA STAFF MALE':{label:'Extra Male',    color:'var(--lime2)'},
+      'EXTRA STAFF FEMALE':{label:'Extra Female',color:'var(--rose2)'},
+    };
+    const totals={};
+    Object.keys(mp_cols).forEach(k=>{totals[k]=(rows||[]).reduce((a,r)=>a+num(r[k]||0),0);});
+    const grand=Object.values(totals).reduce((a,b)=>a+b,0);
+    const extTotal=(totals['EXTRA STAFF MALE']||0)+(totals['EXTRA STAFF FEMALE']||0);
+
+    function mpCard(label,val,color,sub){
+      return'<div class="stat-card" style="border-color:'+color+'40;background:'+color+'08">'
+        +'<div class="slabel" style="color:'+color+'99">'+label+'</div>'
+        +'<div class="sval" style="color:'+color+'">'+fmt(val)+'</div>'
+        +(sub?'<div class="ssub">'+sub+'</div>':'')
+        +'</div>';
+    }
+
+    const extraCard='<div class="stat-card" style="border-color:var(--lime2)40;background:var(--lime2)08">'
+      +'<div class="slabel" style="color:var(--lime2)99">Extra Staff</div>'
+      +'<div class="sval" style="color:var(--lime2)">'+fmt(extTotal)+'</div>'
+      +'<div class="ssub" style="color:var(--t3)">Male: '+fmt(totals['EXTRA STAFF MALE']||0)+' · Female: '+fmt(totals['EXTRA STAFF FEMALE']||0)+'</div>'
+      +'</div>';
+
+    return'<div class="stats-row">'
+      +mpCard('Total Manpower',grand,'var(--amber)')
+      +mpCard('Mistri',totals['Mistri']||0,'var(--amber2)')
+      +mpCard('Operator Male',totals['Operator (MALE)']||0,'var(--cyan2)')
+      +mpCard('Worker Male',totals['Worker (MALE)']||0,'var(--cyan)')
+      +mpCard('Worker Female',totals['Worker (FEMALE)']||0,'var(--violet2)')
+      +extraCard
+      +'</div>';
+  }
+
+  return'<div class="stats-row"><div class="stat-card"><div class="slabel">Rows</div><div class="sval sv-v">'+rc.toLocaleString()+'</div></div>'+statCards+'</div>';
 }
 
 function rTbar(name,hdrs,st,filt,total){const hasF=st.q||st.fv;return`<div class="toolbar"><div class="sw"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg><input class="sinp" type="text" placeholder="Search…" value="${esc(st.q)}" oninput="uq('${esc(name)}',this.value)" id="sb"></div><select class="fsel" onchange="ufc('${esc(name)}',this.value)"><option value="">All columns</option>${hdrs.map(h=>`<option value="${esc(h)}" ${st.fc===h?'selected':''}>${esc(h)}</option>`).join('')}</select>${st.fc?`<input class="finp" type="text" placeholder="Filter value…" value="${esc(st.fv)}" oninput="ufv('${esc(name)}',this.value)" id="fv">`:``}${hasF?`<button class="tbtn" onclick="cf('${esc(name)}')"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>Clear</button>`:''}<span class="ri" id="ri-${esc(name)}">${filt!==total?filt.toLocaleString()+' of '+total.toLocaleString()+' rows':filt.toLocaleString()+' rows'}</span><button class="tbtn" onclick="xCSV('${esc(name)}')"><svg viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>CSV</button></div>`;}
