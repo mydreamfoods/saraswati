@@ -292,7 +292,7 @@ table.dt tr:hover td{background:rgba(139,92,246,.07);color:var(--t1)}
   <button class="ham-btn" id="hamBtn" onclick="toggleSidebar()">
     <svg viewBox="0 0 24 24"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
   </button>
-  <span class="hdr-brand">MDF</span>
+  <span class="hdr-brand">DASHBOARD</span>
   <span class="hdr-name">Saraswati Tasks</span>
   <div class="hdr-r">
     <span class="chip cv" id="sc">—</span>
@@ -311,7 +311,7 @@ table.dt tr:hover td{background:rgba(139,92,246,.07);color:var(--t1)}
 <div class="layout">
   <div class="sidebar" id="sidebar">
     <div class="sidebar-header">
-      <div class="sidebar-brand">MDF Operations</div>
+      <div class="sidebar-brand">SARASWATI Operations</div>
       <div class="sidebar-title">Factory Dashboard</div>
       <div class="sidebar-sub" id="sidebar-sub">Loading…</div>
     </div>
@@ -949,7 +949,7 @@ function cell(val,col,nums,dates){
   if(dates.includes(col)||isDateCol||lDate(s)){if(!s||s==='—')return`<td class="n-em">—</td>`;return`<td class="tdt" style="white-space:nowrap">${fmtDate(val)}</td>`;}
   if(s.toLowerCase()==='true'||s.toLowerCase()==='yes')return`<td style="color:var(--lime)">✓</td>`;
   if(s.toLowerCase()==='false'||s.toLowerCase()==='no')return`<td style="color:var(--rose)">✗</td>`;
-  if(nums.includes(col)&&!isNaN(parseFloat(s)))return`<td class="tnm">${fmt(parseFloat(s))}</td>`;
+  if(nums.includes(col)&&!isNaN(parseFloat(s))&&!/mobile|phone|contact|tel|whatsapp/i.test(col))return`<td class="tnm">${fmt(parseFloat(s))}</td>`;
   if(s.startsWith('http')){
     const href=s.includes('drive.google.com')?driveUrl(s):s;const label=s.includes('drive.google.com')?'📷 View Photo':'🔗 Open';
     return`<td><a href="${esc(href)}" target="_blank" rel="noopener" style="display:inline-flex;align-items:center;gap:5px;font-size:11px;padding:3px 9px;border-radius:5px;background:rgba(34,211,238,.1);color:var(--cyan);border:1px solid rgba(34,211,238,.25);text-decoration:none;font-family:var(--font-mono);white-space:nowrap" onmouseover="this.style.background='rgba(34,211,238,.2)'" onmouseout="this.style.background='rgba(34,211,238,.1)'">${label}</a></td>`;
@@ -968,7 +968,7 @@ function cf(n){S[n].q='';S[n].fc='';S[n].fv='';S[n].p=1;renderSheet(n);}
 function sBy(n,i){const st=S[n];st.sc===i?st.sd=st.sd==='asc'?'desc':'asc':(st.sc=i,st.sd='asc');st.p=1;renderSheet(n);}
 function gp(n,p){S[n].p=p;renderSheet(n);window.scrollTo(0,0);}
 function fRows(rows,st,hdrs){let o=rows;if(st.q){const q=st.q.toLowerCase();o=o.filter(r=>hdrs.some(h=>String(r[h]||'').toLowerCase().includes(q)));}if(st.fc&&st.fv){const q=st.fv.toLowerCase();o=o.filter(r=>String(r[st.fc]||'').toLowerCase().includes(q));}return o;}
-function nCols(rows,hdrs){return hdrs.filter(h=>{const s=rows.slice(0,20).map(r=>r[h]).filter(v=>v!==''&&v!=null);return s.length&&s.filter(v=>!isNaN(parseFloat(v))&&isFinite(v)).length/s.length>.7;});}
+function nCols(rows,hdrs){return hdrs.filter(h=>{if(/mobile|phone|contact|tel|whatsapp/i.test(h))return false;const s=rows.slice(0,20).map(r=>r[h]).filter(v=>v!==''&&v!=null);return s.length&&s.filter(v=>!isNaN(parseFloat(v))&&isFinite(v)).length/s.length>.7;});}
 function dCols(rows,hdrs){return hdrs.filter(h=>{const isDateHdr=/timestamp|date|time|start|end/i.test(h);const s=rows.slice(0,10).map(r=>r[h]).filter(v=>v);if(!s.length)return false;return isDateHdr||s.filter(v=>lDate(String(v))).length>s.length*.5;});}
 
 function pDate(val){
