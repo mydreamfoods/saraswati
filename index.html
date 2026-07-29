@@ -275,6 +275,17 @@ table.dt tr:hover td{background:rgba(139,92,246,.07);color:var(--t1)}
   table.dt td,table.dt th,table.gt td,table.gt th{padding:7px 8px;font-size:11px}.toolbar{gap:6px}.sinp{font-size:11px}
 }
 @media(max-width:380px){.dp-kpi-row{grid-template-columns:repeat(2,1fr)}}
+
+/* ── IMAGE LIGHTBOX ── */
+.img-modal{display:none;position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,.92);backdrop-filter:blur(8px);align-items:center;justify-content:center;flex-direction:column;gap:12px}
+.img-modal.open{display:flex}
+.img-modal-img{max-width:90vw;max-height:80vh;border-radius:10px;box-shadow:0 8px 48px rgba(0,0,0,.8);object-fit:contain}
+.img-modal-close{position:fixed;top:16px;right:20px;font-size:28px;color:#fff;cursor:pointer;opacity:.7;transition:opacity .2s;background:none;border:none;line-height:1}
+.img-modal-close:hover{opacity:1}
+.img-modal-nav{display:flex;gap:14px;align-items:center}
+.img-modal-btn{background:rgba(255,255,255,.12);border:1px solid rgba(255,255,255,.2);color:#fff;padding:8px 18px;border-radius:8px;font-size:18px;cursor:pointer;transition:background .2s}
+.img-modal-btn:hover{background:rgba(255,255,255,.25)}
+.img-modal-counter{font-size:12px;color:rgba(255,255,255,.5);font-family:var(--font-mono)}
 </style>
 </head>
 <body>
@@ -323,6 +334,15 @@ table.dt tr:hover td{background:rgba(139,92,246,.07);color:var(--t1)}
   <div class="lw"><div class="sp"></div><div class="lt">Fetching sheets data…</div><div style="font-size:11px;color:var(--t3);font-family:var(--font-mono);margin-top:4px" id="fetch-status">Connecting…</div></div>
 </div>
     </div>
+  </div>
+</div>
+<div class="img-modal" id="imgModal" onclick="if(event.target===this)closeImgModal()">
+  <button class="img-modal-close" onclick="closeImgModal()">✕</button>
+  <img class="img-modal-img" id="imgModalImg" src="" alt="photo">
+  <div class="img-modal-nav">
+    <button class="img-modal-btn" id="imgModalPrev" onclick="imgModalNav(-1)">‹</button>
+    <span class="img-modal-counter" id="imgModalCounter"></span>
+    <button class="img-modal-btn" id="imgModalNext" onclick="imgModalNav(1)">›</button>
   </div>
 </div>
 <script>
@@ -748,7 +768,7 @@ function renderBl(multi){
     <div class="bl-row"><span class="bl-key">Jars</span><span class="bl-val" style="font-size:16px;color:var(--amber)">${(parseFloat(r['1 Jar mei 30 pcs'])||0).toFixed(1)}</span></div>
     <div class="bl-row"><span class="bl-key">Cartons</span><span class="bl-val" style="font-size:16px;color:var(--lime)">${(parseFloat(r['24 Jar in 1 Carton'])||0).toFixed(2)}</span></div>
     ${r['Reason']?`<div style="margin-top:10px;padding-top:8px;border-top:1px solid rgba(34,211,238,.12);font-size:12px;color:var(--t2);line-height:1.6">${esc(r['Reason'])}</div>`:''}
-    ${(()=>{const link=Object.values(r).find(v=>String(v).includes('drive.google.com'));if(!link)return'';return`<a href="${esc(driveUrl(String(link)))}" target="_blank" rel="noopener" style="display:inline-flex;align-items:center;gap:5px;font-size:11px;padding:4px 10px;border-radius:5px;background:rgba(34,211,238,.1);color:var(--cyan);border:1px solid rgba(34,211,238,.25);text-decoration:none;margin-top:8px;font-family:var(--font-mono)">📷 View Reading Photo</a>`;})()}
+    ${(()=>{const link=Object.values(r).find(v=>String(v).includes('drive.google.com'));if(!link)return'';const bUrl=driveUrl(String(link));const bRid=_regUrls([bUrl]);return`<span onclick="openImgModal(_imgReg['${bRid}'],0)" style="display:inline-flex;align-items:center;gap:5px;font-size:11px;padding:4px 10px;border-radius:5px;background:rgba(34,211,238,.1);color:var(--cyan);border:1px solid rgba(34,211,238,.25);cursor:pointer;margin-top:8px;font-family:var(--font-mono)">📷 View Reading Photo</span>`;})()}
   </div>`).join('');
   return sec('bl','💊 Blister','var(--cyan)',rows.length,`<div class="bl-body">${cmp}<div class="bl-summary">${sumCards}</div><div class="bl-grid">${cards}</div></div>`,`${tR.toLocaleString('en-IN')} total reading`);
 }
@@ -1037,10 +1057,12 @@ function cell(val,col,nums,dates){
     // Split multiple comma-separated URLs
     const urls=s.split(',').map(u=>u.trim()).filter(u=>u.startsWith('http'));
     if(urls.length){
-      const imgs=urls.map(u=>{
-        const thumb=driveThumb(u);const href=driveUrl(u);
-        if(!thumb)return`<a href="${esc(href)}" target="_blank" rel="noopener" style="color:var(--cyan);font-size:11px;margin-right:4px">📷</a>`;
-        return`<a href="${esc(href)}" target="_blank" rel="noopener" style="display:inline-block;margin-right:3px"><img src="${esc(thumb)}" alt="photo" loading="lazy" style="width:44px;height:44px;object-fit:cover;border-radius:5px;border:1px solid rgba(34,211,238,.3);vertical-align:middle;cursor:pointer;transition:transform .15s" onmouseover="this.style.transform='scale(2)';this.style.zIndex=10;this.style.position='relative'" onmouseout="this.style.transform='scale(1)'"></a>`;
+      // Build JS-safe URL array for lightbox
+      const rid=_regUrls(urls);
+      const imgs=urls.map((u,i)=>{
+        const thumb=driveThumb(u);
+        if(!thumb)return`<span onclick="openImgModal(_imgReg['${rid}'],${i})" style="color:var(--cyan);font-size:18px;cursor:pointer;margin-right:4px">📷</span>`;
+        return`<img src="${esc(thumb)}" alt="photo" loading="lazy" onclick="openImgModal(_imgReg['${rid}'],${i})" style="width:44px;height:44px;object-fit:cover;border-radius:5px;border:1px solid rgba(34,211,238,.3);vertical-align:middle;cursor:pointer;margin-right:3px;transition:transform .15s" onmouseover="this.style.transform='scale(1.5)';this.style.zIndex=10;this.style.position='relative'" onmouseout="this.style.transform='scale(1)'">`;
       }).join('');
       return`<td style="white-space:nowrap">${imgs}</td>`;
     }
@@ -1057,11 +1079,11 @@ function cell(val,col,nums,dates){
       // Check if any are drive image links
       const allDrive=urls.every(u=>u.includes('drive.google.com'));
       if(allDrive&&urls.length>1){
-        // Multiple drive links — show thumbnails
-        const imgs=urls.map(u=>{
-          const thumb=driveThumb(u);const href=driveUrl(u);
-          if(!thumb)return`<a href="${esc(href)}" target="_blank" rel="noopener" style="color:var(--cyan);font-size:11px;margin-right:4px">📷</a>`;
-          return`<a href="${esc(href)}" target="_blank" rel="noopener" style="display:inline-block;margin-right:3px"><img src="${esc(thumb)}" alt="photo" loading="lazy" style="width:44px;height:44px;object-fit:cover;border-radius:5px;border:1px solid rgba(34,211,238,.3);vertical-align:middle;cursor:pointer;transition:transform .15s" onmouseover="this.style.transform='scale(2)';this.style.zIndex=10;this.style.position='relative'" onmouseout="this.style.transform='scale(1)'"></a>`;
+        const rid=_regUrls(urls);
+        const imgs=urls.map((u,i)=>{
+          const thumb=driveThumb(u);
+          if(!thumb)return`<span onclick="openImgModal(_imgReg['${rid}'],${i})" style="color:var(--cyan);font-size:18px;cursor:pointer;margin-right:4px">📷</span>`;
+          return`<img src="${esc(thumb)}" alt="photo" loading="lazy" onclick="openImgModal(_imgReg['${rid}'],${i})" style="width:44px;height:44px;object-fit:cover;border-radius:5px;border:1px solid rgba(34,211,238,.3);vertical-align:middle;cursor:pointer;margin-right:3px;transition:transform .15s" onmouseover="this.style.transform='scale(1.5)';this.style.zIndex=10;this.style.position='relative'" onmouseout="this.style.transform='scale(1)'">`;
         }).join('');
         return`<td style="white-space:nowrap">${imgs}</td>`;
       }
@@ -1129,6 +1151,30 @@ function num(v){return parseFloat(String(v||'').replace(/[^\d.]/g,''))||0;}
 function fmt(n){if(isNaN(n))return'—';return Number.isInteger(n)?n.toLocaleString('en-IN'):n.toLocaleString('en-IN',{maximumFractionDigits:2});}
 function esc(s){return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');}
 function xCSV(name){const rows=D[name]||[];if(!rows.length)return;const hdrs=Object.keys(rows[0]);const lines=[hdrs.join(','),...rows.map(r=>hdrs.map(h=>{const v=String(r[h]??'');return(v.includes(',')||v.includes('"')||v.includes('\n'))?`"${v.replace(/"/g,'""')}"`:''+v;}).join(','))];const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([lines.join('\n')],{type:'text/csv'}));a.download=name.replace(/\s+/g,'_')+'.csv';a.click();}
+// ── LIGHTBOX ──
+let _lbUrls=[],_lbIdx=0;
+const _imgReg={};let _imgRegId=0;
+function _regUrls(urls){const id='r'+(++_imgRegId);_imgReg[id]=urls;return id;}
+function openImgModal(urls,idx){
+  _lbUrls=Array.isArray(urls)?urls:[urls];_lbIdx=idx||0;
+  document.getElementById('imgModal').classList.add('open');
+  _lbShow();
+  document.addEventListener('keydown',_lbKey);
+}
+function closeImgModal(){
+  document.getElementById('imgModal').classList.remove('open');
+  document.removeEventListener('keydown',_lbKey);
+}
+function _lbShow(){
+  const id=_lbUrls[_lbIdx].match(/[?&]id=([a-zA-Z0-9_-]+)/)||_lbUrls[_lbIdx].match(/\/d\/([a-zA-Z0-9_-]+)/);
+  const src=id?`https://drive.google.com/thumbnail?id=${id[1]}&sz=w1200`:_lbUrls[_lbIdx];
+  document.getElementById('imgModalImg').src=src;
+  document.getElementById('imgModalCounter').textContent=_lbUrls.length>1?(_lbIdx+1)+' / '+_lbUrls.length:'';
+  document.getElementById('imgModalPrev').style.display=_lbUrls.length>1?'':'none';
+  document.getElementById('imgModalNext').style.display=_lbUrls.length>1?'':'none';
+}
+function imgModalNav(d){_lbIdx=(_lbIdx+d+_lbUrls.length)%_lbUrls.length;_lbShow();}
+function _lbKey(e){if(e.key==='Escape')closeImgModal();if(e.key==='ArrowLeft')imgModalNav(-1);if(e.key==='ArrowRight')imgModalNav(1);}
 function toggleSidebar(){
   const s=document.getElementById('sidebar');
   const o=document.getElementById('sidebarOverlay');
