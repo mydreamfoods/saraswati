@@ -464,9 +464,14 @@ function buildTabs(sheets){
   const tabHtml=sheets.map(s=>{
     const m=sheetMeta(s);const isActive=activeTab===s;
     const activeBg=isActive?`;background:${m.color}18;border-color:${m.color}35;color:${m.color}`:'';
-    return`<div class="tab ${isActive?'active':''}" onclick="sw('${esc(s)}')" style="${activeBg}"><span class="tab-icon">${m.icon}</span><span class="tab-label">${esc(s)}</span><span class="tab-count">${(D[s]||[]).length}</span></div>`;
+    // Use data-sheet attribute to avoid quote issues with apostrophes in sheet names
+    return`<div class="tab ${isActive?'active':''}" data-sheet="${esc(s)}" style="${activeBg}"><span class="tab-icon">${m.icon}</span><span class="tab-label">${esc(s)}</span><span class="tab-count">${(D[s]||[]).length}</span></div>`;
   }).join('');
-  tw.innerHTML=`<div class="tab special ${activeTab==='daily'?'active':''}" onclick="sw('daily')"><span class="tab-icon">📅</span><span class="tab-label">Daily Report</span><span class="tab-count">${allDates.length}d</span></div>`+tabHtml;
+  tw.innerHTML=`<div class="tab special ${activeTab==='daily'?'active':''}" data-sheet="daily"><span class="tab-icon">📅</span><span class="tab-label">Daily Report</span><span class="tab-count">${allDates.length}d</span></div>`+tabHtml;
+  // Attach click handlers via JS (no inline onclick = no quote issues)
+  tw.querySelectorAll('.tab').forEach(el=>{
+    el.onclick=function(){sw(this.dataset.sheet);};
+  });
   // Update sidebar sub-text
   const total=sheets.reduce((a,s)=>a+(D[s]||[]).length,0);
   const sub=document.getElementById('sidebar-sub');
@@ -1045,9 +1050,29 @@ function cell(val,col,nums,dates){
   if(s.toLowerCase()==='true'||s.toLowerCase()==='yes')return`<td style="color:var(--lime)">✓</td>`;
   if(s.toLowerCase()==='false'||s.toLowerCase()==='no')return`<td style="color:var(--rose)">✗</td>`;
   if(nums.includes(col)&&!isNaN(parseFloat(s))&&!/mobile|phone|contact|tel|whatsapp/i.test(col))return`<td class="tnm">${fmt(parseFloat(s))}</td>`;
-  if(s.startsWith('http')){
-    const href=s.includes('drive.google.com')?driveUrl(s):s;const label=s.includes('drive.google.com')?'📷 View Photo':'🔗 Open';
-    return`<td><a href="${esc(href)}" target="_blank" rel="noopener" style="display:inline-flex;align-items:center;gap:5px;font-size:11px;padding:3px 9px;border-radius:5px;background:rgba(34,211,238,.1);color:var(--cyan);border:1px solid rgba(34,211,238,.25);text-decoration:none;font-family:var(--font-mono);white-space:nowrap" onmouseover="this.style.background='rgba(34,211,238,.2)'" onmouseout="this.style.background='rgba(34,211,238,.1)'">${label}</a></td>`;
+  // Handle single or multiple comma-separated URLs (non-image columns)
+  if(s.includes('http')){
+    const urls=s.split(',').map(u=>u.trim()).filter(u=>u.startsWith('http'));
+    if(urls.length){
+      // Check if any are drive image links
+      const allDrive=urls.every(u=>u.includes('drive.google.com'));
+      if(allDrive&&urls.length>1){
+        // Multiple drive links — show thumbnails
+        const imgs=urls.map(u=>{
+          const thumb=driveThumb(u);const href=driveUrl(u);
+          if(!thumb)return`<a href="${esc(href)}" target="_blank" rel="noopener" style="color:var(--cyan);font-size:11px;margin-right:4px">📷</a>`;
+          return`<a href="${esc(href)}" target="_blank" rel="noopener" style="display:inline-block;margin-right:3px"><img src="${esc(thumb)}" alt="photo" loading="lazy" style="width:44px;height:44px;object-fit:cover;border-radius:5px;border:1px solid rgba(34,211,238,.3);vertical-align:middle;cursor:pointer;transition:transform .15s" onmouseover="this.style.transform='scale(2)';this.style.zIndex=10;this.style.position='relative'" onmouseout="this.style.transform='scale(1)'"></a>`;
+        }).join('');
+        return`<td style="white-space:nowrap">${imgs}</td>`;
+      }
+      // Single or mixed URLs — show as links
+      const links=urls.map(u=>{
+        const href=u.includes('drive.google.com')?driveUrl(u):u;
+        const label=u.includes('drive.google.com')?'📷':'🔗';
+        return`<a href="${esc(href)}" target="_blank" rel="noopener" style="display:inline-flex;align-items:center;gap:4px;font-size:11px;padding:3px 9px;border-radius:5px;background:rgba(34,211,238,.1);color:var(--cyan);border:1px solid rgba(34,211,238,.25);text-decoration:none;font-family:var(--font-mono);white-space:nowrap;margin-right:4px" onmouseover="this.style.background='rgba(34,211,238,.2)'" onmouseout="this.style.background='rgba(34,211,238,.1)'">${label} ${u.includes('drive.google.com')?'Photo':'Open'}</a>`;
+      }).join('');
+      return`<td>${links}</td>`;
+    }
   }
   if(s.length>80)return`<td title="${esc(s)}">${esc(s.slice(0,78))}…</td>`;
   return`<td class="n-t2">${esc(s)}</td>`;
@@ -1102,7 +1127,7 @@ function fmtDate(v){
 }
 function num(v){return parseFloat(String(v||'').replace(/[^\d.]/g,''))||0;}
 function fmt(n){if(isNaN(n))return'—';return Number.isInteger(n)?n.toLocaleString('en-IN'):n.toLocaleString('en-IN',{maximumFractionDigits:2});}
-function esc(s){return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
+function esc(s){return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');}
 function xCSV(name){const rows=D[name]||[];if(!rows.length)return;const hdrs=Object.keys(rows[0]);const lines=[hdrs.join(','),...rows.map(r=>hdrs.map(h=>{const v=String(r[h]??'');return(v.includes(',')||v.includes('"')||v.includes('\n'))?`"${v.replace(/"/g,'""')}"`:''+v;}).join(','))];const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([lines.join('\n')],{type:'text/csv'}));a.download=name.replace(/\s+/g,'_')+'.csv';a.click();}
 function toggleSidebar(){
   const s=document.getElementById('sidebar');
